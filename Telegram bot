@@ -1,0 +1,123 @@
+from pyowm import OWM
+#original
+owm = OWM("db82b5fb8c25c936c4f4446c39046963")
+
+
+def get_forecasts(lat, lon):
+    observation = owm.three_hours_forecast_at_coords(lat, lon)
+    forecasts = observation.get_forecast()
+
+    location = forecasts.get_location()
+    loc_name = location.get_name()
+    loc_lat = location.get_lat()
+    loc_lon = location.get_lon()
+
+    results = []
+
+    for forecast in forecasts:
+        time = forecast.get_reference_time('iso')
+        status = forecast.get_status()
+        detailed = forecast.get_detailed_status()
+        temperature = forecast.get_temperature('celsius')
+        temp = temperature.get("temp")
+        temp_min = temperature.get("temp_min")
+        temp_max = temperature.get("temp_max")
+
+        results.append("""
+        Location : {} Lat : {} Lon {}
+        Time : {}
+        Status : {}
+        Detailed : {}
+        Temperature : {}
+        Min Temperature : {}
+        Max Temperature : {}
+        """.format(loc_name, loc_lat, loc_lon, time,
+                   status, detailed, temp, temp_min, temp_max))
+
+    return "".join(results[:10])
+
+
+if __name__ == "__main__":
+    print(get_forecasts(-1.2, 36))
+
+#main function
+
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackQueryHandler
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove
+from weather import get_forecasts
+
+# check for new messages --> polling
+updater = Updater(token="888544291:AAH9oxfIsZ8lq5dVzL5_Ki_-fnNu6vnz8wE")
+
+# allows to register handler -> command, text, video, audio etc
+dispatcher = updater.dispatcher
+
+
+# define a command callback function
+def start(bot, update):
+    bot.send_message(chat_id=update.message.chat_id, text="Hello, Welcome to WeatherXYZ....")
+
+
+# create a command handler
+start_handler = CommandHandler("start", start)
+
+# add command handler to dispatcher
+dispatcher.add_handler(start_handler)
+
+
+def echo(bot, update):
+    bot.send_message(chat_id=update.message.chat_id, text=update.message.text.upper())
+
+
+# create a text handler
+echo_handler = MessageHandler(Filters.text, echo)
+
+dispatcher.add_handler(echo_handler)
+
+
+def option(bot, update):
+    button = [
+        [InlineKeyboardButton("Option 1", callback_data="1"),
+         InlineKeyboardButton("Option 2", callback_data="2")],
+        [InlineKeyboardButton("Option 3", callback_data="3")]
+    ]
+    reply_markup = InlineKeyboardMarkup(button)
+
+    bot.send_message(chat_id=update.message.chat_id,
+                     text="Choose one option..",
+                     reply_markup=reply_markup)
+
+
+option_handler = CommandHandler("option", option)
+dispatcher.add_handler(option_handler)
+
+
+def get_location(bot, update):
+    button = [
+        [KeyboardButton("Share Location", request_location=True)]
+    ]
+    reply_markup = ReplyKeyboardMarkup(button)
+    bot.send_message(chat_id=update.message.chat_id,
+                     text="Mind sharing location?",
+                     reply_markup=reply_markup)
+
+
+get_location_handler = CommandHandler("location", get_location)
+dispatcher.add_handler(get_location_handler)
+
+
+def location(bot, update):
+    lat = update.message.location.latitude
+    lon = update.message.location.longitude
+    forecasts = get_forecasts(lat, lon)
+    bot.send_message(chat_id=update.message.chat_id,
+                     text=forecasts,
+                     reply_markup=ReplyKeyboardRemove())
+
+
+location_handler = MessageHandler(Filters.location, location)
+dispatcher.add_handler(location_handler)
+
+# start polling
+updater.start_polling()
